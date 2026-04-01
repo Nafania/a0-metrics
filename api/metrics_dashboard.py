@@ -1,6 +1,6 @@
 from agent import AgentContext
 from helpers.api import ApiHandler, Request, Response
-from ..helpers.metrics_collector import collector
+from usr.plugins._metrics.helpers.metrics_collector import collector
 
 
 class MetricsDashboard(ApiHandler):

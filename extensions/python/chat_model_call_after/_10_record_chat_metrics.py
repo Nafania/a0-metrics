@@ -16,7 +16,7 @@ class RecordChatMetrics(Extension):
         if call_data is None:
             return
 
-        from plugins._metrics.helpers.metrics_collector import collector
+        from usr.plugins._metrics.helpers.metrics_collector import collector
 
         start = call_data.get("_metrics_start")
         latency_ms = int((time.time() - start) * 1000) if start else 0
