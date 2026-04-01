@@ -15,19 +15,32 @@ from collections import deque
 from typing import Any
 
 
-_RING_SIZE = 2000
-_FLUSH_INTERVAL = 30.0
+_DEFAULT_RING_SIZE = 2000
+_DEFAULT_FLUSH_INTERVAL = 30.0
 
 
 class MetricsCollector:
     """Thread-safe ring buffer that stores LLM usage events."""
 
-    def __init__(self, maxlen: int = _RING_SIZE):
+    def __init__(self, maxlen: int = _DEFAULT_RING_SIZE):
         self._lock = threading.Lock()
         self._events: deque[dict[str, Any]] = deque(maxlen=maxlen)
         self._started_at = time.time()
         self._persist_path: str | None = None
+        self._flush_interval: float = _DEFAULT_FLUSH_INTERVAL
         self._dirty = False
+
+    def configure(
+        self,
+        maxlen: int | None = None,
+        flush_interval: float | None = None,
+    ) -> None:
+        """Apply runtime config before persistence is enabled."""
+        if maxlen is not None and maxlen != self._events.maxlen:
+            with self._lock:
+                self._events = deque(self._events, maxlen=maxlen)
+        if flush_interval is not None:
+            self._flush_interval = flush_interval
 
     def enable_persistence(self, path: str) -> None:
         """Enable file-based persistence. Loads existing data and starts auto-save."""
@@ -133,7 +146,7 @@ class MetricsCollector:
         def _tick():
             self._flush()
             self._schedule_flush()
-        t = threading.Timer(_FLUSH_INTERVAL, _tick)
+        t = threading.Timer(self._flush_interval, _tick)
         t.daemon = True
         t.start()
 
@@ -221,13 +234,14 @@ def _aggregate_by_project(events: list[dict]) -> list[dict]:
 
 
 def _build_timeline(events: list[dict]) -> list[dict]:
+    import datetime as _dt
+
     now = time.time()
     buckets: dict[int, dict] = {}
     for e in events:
         ts = e.get("timestamp", "")
         try:
-            import datetime
-            dt = datetime.datetime.fromisoformat(ts.rstrip("Z"))
+            dt = _dt.datetime.fromisoformat(ts.rstrip("Z"))
             epoch = dt.timestamp()
         except Exception:
             epoch = now

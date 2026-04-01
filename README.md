@@ -1,4 +1,4 @@
-# _metrics — LLM Metrics Plugin for Agent Zero
+# metrics — LLM Metrics Plugin for Agent Zero
 
 In-memory ring buffer for LLM usage metrics with a dashboard UI, file persistence, and per-model/project aggregation.
 
@@ -34,4 +34,3 @@ Defaults are in `default_config.yaml`. Override via the plugin settings UI or by
 | `ring_buffer_size` | 2000 | Max events in the ring buffer |
 | `flush_interval_seconds` | 30 | Seconds between persistence flushes |
 | `persistence_file` | `usr/metrics.json` | Where events are persisted |
-| `retention_max_events` | 2000 | Max events retained on disk |
