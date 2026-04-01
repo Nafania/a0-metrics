@@ -43,7 +43,7 @@ class RecordChatMetrics(Extension):
             if ctx:
                 context_id = getattr(ctx, "id", "")
                 chat_name = getattr(ctx, "name", "")
-                project = getattr(ctx, "project", "") or ""
+                project = (ctx.data.get("project") if hasattr(ctx, "data") else "") or ""
 
         collector.record({
             "model": model_name,
