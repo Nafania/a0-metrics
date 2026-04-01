@@ -91,7 +91,7 @@
                     </div>
 
                     <!-- Timeline -->
-                    <div class="m-section" x-show="$store.metricsDashboard.timeline.length > 1">
+                    <div class="m-section" x-show="($store.metricsDashboard.timeline || []).length > 1">
                         <h3>Activity (last 60 min)</h3>
                         <div class="sparkline-box">
                             <svg viewBox="0 0 600 80" preserveAspectRatio="none" class="sparkline-svg">
@@ -108,13 +108,13 @@
                     </div>
 
                     <!-- Top models mini table -->
-                    <div class="m-section" x-show="$store.metricsDashboard.byModel.length > 0">
+                    <div class="m-section" x-show="($store.metricsDashboard.byModel || []).length > 0">
                         <h3>Top Models</h3>
                         <div class="mini-table-wrap">
                             <table class="mini-table">
                                 <thead><tr><th>Model</th><th>Calls</th><th>Tokens</th><th>Avg Latency</th></tr></thead>
                                 <tbody>
-                                    <template x-for="m in $store.metricsDashboard.byModel.slice(0, 5)" :key="m.name">
+                                    <template x-for="(m, midx) in ($store.metricsDashboard.byModel || []).slice(0, 5)" :key="m.name || midx">
                                         <tr>
                                             <td class="cell-name" x-text="m.name"></td>
                                             <td x-text="m.calls"></td>
@@ -128,10 +128,10 @@
                     </div>
 
                     <!-- Recent errors -->
-                    <div class="m-section" x-show="$store.metricsDashboard.recentErrors.length > 0">
+                    <div class="m-section" x-show="($store.metricsDashboard.recentErrors || []).length > 0">
                         <h3>Recent Errors</h3>
                         <div class="errors-list">
-                            <template x-for="err in $store.metricsDashboard.recentErrors.slice(0, 5)" :key="err.timestamp">
+                            <template x-for="(err, eidx) in ($store.metricsDashboard.recentErrors || []).slice(0, 5)" :key="eidx">
                                 <div class="err-item">
                                     <span class="err-model" x-text="err.model"></span>
                                     <span class="err-msg" x-text="err.error"></span>
@@ -158,10 +158,10 @@
                         </template>
                     </div>
 
-                    <div class="m-section" x-show="$store.metricsDashboard.byModel.length > 0">
+                    <div class="m-section" x-show="($store.metricsDashboard.byModel || []).length > 0">
                         <h3>Latency by Model</h3>
                         <div class="bar-rows">
-                            <template x-for="m in $store.metricsDashboard.byModel" :key="m.name">
+                            <template x-for="m in ($store.metricsDashboard.byModel || [])" :key="m.name">
                                 <div class="bar-row">
                                     <span class="bar-name" x-text="m.name"></span>
                                     <div class="bar-track">
@@ -173,10 +173,10 @@
                         </div>
                     </div>
 
-                    <div class="m-section" x-show="$store.metricsDashboard.byModel.length > 0">
+                    <div class="m-section" x-show="($store.metricsDashboard.byModel || []).length > 0">
                         <h3>TTFT by Model</h3>
                         <div class="bar-rows">
-                            <template x-for="m in $store.metricsDashboard.byModel.filter(x => x.avg_ttft_ms > 0)" :key="m.name">
+                            <template x-for="m in ($store.metricsDashboard.byModel || []).filter(x => x.avg_ttft_ms > 0)" :key="m.name">
                                 <div class="bar-row">
                                     <span class="bar-name" x-text="m.name"></span>
                                     <div class="bar-track">
@@ -195,7 +195,7 @@
                         <table class="agg-table">
                             <thead><tr><th>Usage Type</th><th>Calls</th><th>OK</th><th>Err</th><th>Tokens In</th><th>Tokens Out</th><th>Avg Latency</th><th>Retries</th></tr></thead>
                             <tbody>
-                                <template x-for="r in $store.metricsDashboard.byUsageType" :key="r.name">
+                                <template x-for="r in ($store.metricsDashboard.byUsageType || [])" :key="r.name">
                                     <tr>
                                         <td class="cell-name" x-text="r.name"></td>
                                         <td x-text="r.calls"></td>
@@ -211,14 +211,14 @@
                         </table>
                     </div>
 
-                    <div class="m-section" x-show="$store.metricsDashboard.byUsageType.length > 0">
+                    <div class="m-section" x-show="($store.metricsDashboard.byUsageType || []).length > 0">
                         <h3>Token Split by Usage Type</h3>
                         <div class="bar-rows">
-                            <template x-for="r in $store.metricsDashboard.byUsageType" :key="r.name">
+                            <template x-for="r in ($store.metricsDashboard.byUsageType || [])" :key="r.name">
                                 <div class="bar-row">
                                     <span class="bar-name" x-text="r.name"></span>
                                     <div class="bar-track">
-                                        <div class="bar-fill" :style="'width:' + ((r.tokens_in + r.tokens_out) / $store.metricsDashboard.maxOf($store.metricsDashboard.byUsageType.map(x=>({v:x.tokens_in+x.tokens_out})), 'v') * 100) + '%'"></div>
+                                        <div class="bar-fill" :style="'width:' + ((r.tokens_in + r.tokens_out) / $store.metricsDashboard.maxOf(($store.metricsDashboard.byUsageType || []).map(x=>({v:x.tokens_in+x.tokens_out})), 'v') * 100) + '%'"></div>
                                     </div>
                                     <span class="bar-val" x-text="$store.metricsDashboard.fmtNum(r.tokens_in + r.tokens_out)"></span>
                                 </div>
@@ -229,7 +229,7 @@
 
                 <!-- ═══════ BY PROJECT ═══════ -->
                 <div x-show="$store.metricsDashboard.activeTab === 'projects' && $store.metricsDashboard.totalCalls > 0" class="m-content">
-                    <template x-for="proj in $store.metricsDashboard.byProject" :key="proj.name">
+                    <template x-for="proj in ($store.metricsDashboard.byProject || [])" :key="proj.name">
                         <div class="proj-card">
                             <div class="proj-header" @click="$store.metricsDashboard.toggleProject(proj.name)">
                                 <span class="material-symbols-outlined proj-chevron"
@@ -267,7 +267,7 @@
                 <!-- ═══════ LIVE FEED ═══════ -->
                 <div x-show="$store.metricsDashboard.activeTab === 'feed' && $store.metricsDashboard.totalCalls > 0" class="m-content">
                     <div class="feed-list">
-                        <template x-for="(ev, idx) in $store.metricsDashboard.recentEvents" :key="idx">
+                        <template x-for="(ev, idx) in ($store.metricsDashboard.recentEvents || [])" :key="idx">
                             <div class="feed-item" :class="{ 'feed-err': !ev.success }">
                                 <span class="feed-icon">
                                     <span class="material-symbols-outlined" x-text="ev.success ? 'check_circle' : 'error'"

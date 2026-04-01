@@ -14,12 +14,12 @@ In-memory ring buffer for LLM usage metrics with a dashboard UI, file persistenc
 
 ## Installation
 
-```bash
-cd <agent-zero-root>/usr/plugins/
-git clone <this-repo> _metrics
-```
+### Via UI (recommended)
 
-Restart Agent Zero. The plugin registers automatically via extension points.
+1. Open **Settings → Plugins → Install**.
+2. Switch to the **Git URL** tab.
+3. Enter the repository URL for this plugin.
+4. Click **Install**. The plugin installer will clone the repo into `usr/plugins/`, run `hooks.py`, and enable the plugin automatically.
 
 ## Requirements
 
