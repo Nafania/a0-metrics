@@ -45,11 +45,16 @@ class MetricsCollector:
             self._flush_interval = flush_interval
 
     def enable_persistence(self, path: str) -> None:
-        """Enable file-based persistence. Loads existing data and starts auto-save."""
-        if self._persist_path:
-            return
+        """Enable file-based persistence. Loads existing data and starts auto-save.
+
+        Idempotent and thread-safe: concurrent calls (which happen when Agent Zero
+        triggers after_plugin_change twice in a row) must not double-load events.
+        """
+        with self._lock:
+            if self._persist_path:
+                return
+            self._persist_path = path
         PrintStyle.standard(f"metrics: enabling persistence at {path}")
-        self._persist_path = path
         self._load()
         self._schedule_flush()
 
