@@ -14,6 +14,8 @@ import time
 from collections import deque
 from typing import Any
 
+from helpers.print_style import PrintStyle
+
 
 _DEFAULT_RING_SIZE = 2000
 _DEFAULT_FLUSH_INTERVAL = 30.0
@@ -46,7 +48,7 @@ class MetricsCollector:
         """Enable file-based persistence. Loads existing data and starts auto-save."""
         if self._persist_path:
             return
-        print(f"metrics: enabling persistence at {path}")
+        PrintStyle.standard(f"metrics: enabling persistence at {path}")
         self._persist_path = path
         self._load()
         self._schedule_flush()
@@ -121,7 +123,7 @@ class MetricsCollector:
         if not self._persist_path:
             return
         if not os.path.isfile(self._persist_path):
-            print(f"metrics: persistence file not found: {self._persist_path}")
+            PrintStyle.standard(f"metrics: persistence file not found: {self._persist_path}")
             return
         try:
             with open(self._persist_path, "r") as f:
@@ -130,13 +132,13 @@ class MetricsCollector:
                 with self._lock:
                     for event in data:
                         self._events.append(event)
-                print(f"metrics: loaded {len(data)} events from {self._persist_path}")
+                PrintStyle.standard(f"metrics: loaded {len(data)} events from {self._persist_path}")
             else:
-                print(f"metrics: persistence file is not a JSON array (got {type(data).__name__}), skipping")
+                PrintStyle.warning(f"metrics: persistence file is not a JSON array (got {type(data).__name__}), skipping")
         except json.JSONDecodeError as e:
-            print(f"metrics: corrupted persistence file {self._persist_path}: {e}")
+            PrintStyle.error(f"metrics: corrupted persistence file {self._persist_path}: {e}")
         except OSError as e:
-            print(f"metrics: cannot read persistence file {self._persist_path}: {e}")
+            PrintStyle.error(f"metrics: cannot read persistence file {self._persist_path}: {e}")
 
     def _flush(self) -> None:
         if not self._persist_path or not self._dirty:
