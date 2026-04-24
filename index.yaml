@@ -1,5 +1,7 @@
-name: metrics
 title: LLM Metrics
 description: In-memory ring buffer for LLM usage metrics with dashboard UI, persistence, and per-model/project aggregation.
-version: 1.2.0
-settings_sections: []
+github: https://github.com/Nafania/a0-metrics
+tags:
+  - monitoring
+  - llm
+  - ui

@@ -44,6 +44,7 @@ class MetricsCollector:
 
     def enable_persistence(self, path: str) -> None:
         """Enable file-based persistence. Loads existing data and starts auto-save."""
+        print(f"metrics: enabling persistence at {path}")
         self._persist_path = path
         self._load()
         self._schedule_flush()
@@ -115,7 +116,10 @@ class MetricsCollector:
     # -- Persistence internals --
 
     def _load(self) -> None:
-        if not self._persist_path or not os.path.isfile(self._persist_path):
+        if not self._persist_path:
+            return
+        if not os.path.isfile(self._persist_path):
+            print(f"metrics: persistence file not found: {self._persist_path}")
             return
         try:
             with open(self._persist_path, "r") as f:
@@ -124,8 +128,13 @@ class MetricsCollector:
                 with self._lock:
                     for event in data:
                         self._events.append(event)
-        except (json.JSONDecodeError, OSError):
-            pass
+                print(f"metrics: loaded {len(data)} events from {self._persist_path}")
+            else:
+                print(f"metrics: persistence file is not a JSON array (got {type(data).__name__}), skipping")
+        except json.JSONDecodeError as e:
+            print(f"metrics: corrupted persistence file {self._persist_path}: {e}")
+        except OSError as e:
+            print(f"metrics: cannot read persistence file {self._persist_path}: {e}")
 
     def _flush(self) -> None:
         if not self._persist_path or not self._dirty:
