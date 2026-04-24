@@ -44,6 +44,8 @@ class MetricsCollector:
 
     def enable_persistence(self, path: str) -> None:
         """Enable file-based persistence. Loads existing data and starts auto-save."""
+        if self._persist_path:
+            return
         print(f"metrics: enabling persistence at {path}")
         self._persist_path = path
         self._load()

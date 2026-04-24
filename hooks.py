@@ -1,2 +1,3 @@
 def install():
-    pass
+    from usr.plugins.metrics.helpers.init import initialize
+    initialize()
