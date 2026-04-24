@@ -1,5 +1,5 @@
 name: metrics
 title: LLM Metrics
 description: In-memory ring buffer for LLM usage metrics with dashboard UI, persistence, and per-model/project aggregation.
-version: 1.2.0
+version: 1.2.1
 settings_sections: []
