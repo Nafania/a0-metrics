@@ -11,3 +11,6 @@ def initialize():
     persistence_file = config.get("persistence_file", "usr/metrics.json")
     path = files.get_abs_path(*persistence_file.split("/"))
     collector.enable_persistence(path)
+
+    from usr.plugins.metrics.helpers.litellm_callback import register_litellm_callback
+    register_litellm_callback()

@@ -2,6 +2,7 @@ import datetime
 import time
 from helpers.extension import Extension
 from helpers.tokens import approximate_tokens
+from usr.plugins.metrics.helpers import correlation
 
 
 class RecordChatMetrics(Extension):
@@ -14,6 +15,10 @@ class RecordChatMetrics(Extension):
         **kwargs,
     ):
         if call_data is None:
+            return
+
+        if call_data.get("_metrics_recorded"):
+            correlation.end_call(call_data)
             return
 
         from usr.plugins.metrics.helpers.metrics_collector import collector
@@ -74,4 +79,7 @@ class RecordChatMetrics(Extension):
             "project": project,
             "context_id": context_id,
             "chat_name": chat_name,
+            "source": "agent_hook",
+            "tokens_source": "estimated_fallback",
         })
+        correlation.end_call(call_data)

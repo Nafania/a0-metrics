@@ -10,6 +10,9 @@ class StampStartTime(Extension):
 
         call_data["_metrics_start"] = time.time()
 
+        from usr.plugins.metrics.helpers.correlation import begin_call
+        begin_call(self.agent, call_data, "utility")
+
         original_cb = call_data.get("callback")
         if original_cb:
             async def _ttft_wrapper(chunk: str):

@@ -9,6 +9,13 @@ class RecordErrorMetrics(Extension):
         if not exception:
             return
 
+        from usr.plugins.metrics.helpers import correlation
+        current = correlation.current_call()
+        if current and current.get("recorded"):
+            call_data = current.get("call_data")
+            correlation.end_call(call_data if isinstance(call_data, dict) else None)
+            return
+
         from usr.plugins.metrics.helpers.metrics_collector import collector
 
         agent = self.agent
@@ -50,4 +57,6 @@ class RecordErrorMetrics(Extension):
             "project": project,
             "context_id": context_id,
             "chat_name": chat_name,
+            "source": "agent_exception",
+            "tokens_source": "none",
         })
