@@ -33,6 +33,16 @@ const metricsStore = {
   uptimeSeconds: 0,
   bufferSize: 0,
   bufferCapacity: 0,
+  filteredCount: 0,
+  rangeFromTs: null,
+  rangeToTs: null,
+
+  // Time filters
+  fromDateTime: "",
+  toDateTime: "",
+  bucket: "hour",
+  rangeMode: "last24h",
+  rangePickerOpen: false,
 
   // Polling
   _pollTimer: null,
@@ -47,7 +57,7 @@ const metricsStore = {
   async fetchMetrics() {
     try {
       this.loading = true;
-      const r = await API.callJsonApi("/plugins/metrics/metrics_dashboard", { action: "snapshot" });
+      const r = await API.callJsonApi("/plugins/metrics/metrics_dashboard", this._snapshotPayload());
       if (!r.success) return;
 
       this.totalCalls = r.total_calls;
@@ -72,6 +82,9 @@ const metricsStore = {
       this.uptimeSeconds = r.uptime_seconds;
       this.bufferSize = r.buffer_size;
       this.bufferCapacity = r.buffer_capacity;
+      this.filteredCount = r.filtered_count;
+      this.rangeFromTs = r.range_from_ts;
+      this.rangeToTs = r.range_to_ts;
       this.error = null;
     } catch (e) {
       this.error = e.message;
@@ -80,16 +93,10 @@ const metricsStore = {
     }
   },
 
-  async clearMetrics() {
-    try {
-      await API.callJsonApi("/plugins/metrics/metrics_dashboard", { action: "clear" });
-      await this.fetchMetrics();
-    } catch (e) {
-      this.error = e.message;
-    }
-  },
-
   onOpen() {
+    if (!this.fromDateTime || !this.toDateTime) {
+      this.setLast24Hours();
+    }
     this.fetchMetrics();
     this._pollTimer = setInterval(() => this.fetchMetrics(), 5000);
   },
@@ -107,6 +114,81 @@ const metricsStore = {
 
   isProjectExpanded(name) {
     return !!this._expandedProjects[name];
+  },
+
+  setLast24Hours() {
+    const to = new Date();
+    const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
+    this.fromDateTime = this._toLocalDateTimeInput(from);
+    this.toDateTime = this._toLocalDateTimeInput(to);
+    this.bucket = "hour";
+    this.rangeMode = "last24h";
+  },
+
+  resetRange() {
+    this.setLast24Hours();
+    this.rangePickerOpen = false;
+    this.fetchMetrics();
+  },
+
+  applyFilters() {
+    this.rangeMode = "custom";
+    this.rangePickerOpen = false;
+    this.fetchMetrics();
+  },
+
+  toggleRangePicker() {
+    this.rangePickerOpen = !this.rangePickerOpen;
+  },
+
+  _snapshotPayload() {
+    const range = this._currentRange();
+    return {
+      action: "snapshot",
+      from_ts: range.from.toISOString(),
+      to_ts: range.to.toISOString(),
+      bucket: this.bucket || "hour",
+    };
+  },
+
+  _currentRange() {
+    if (this.rangeMode === "last24h") {
+      const to = new Date();
+      const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
+      this.fromDateTime = this._toLocalDateTimeInput(from);
+      this.toDateTime = this._toLocalDateTimeInput(to);
+      return { from, to };
+    }
+
+    const from = this._dateFromInput(this.fromDateTime);
+    const to = this._dateFromInput(this.toDateTime);
+    if (from && to) return { from, to };
+
+    const fallbackTo = new Date();
+    return {
+      from: new Date(fallbackTo.getTime() - 24 * 60 * 60 * 1000),
+      to: fallbackTo,
+    };
+  },
+
+  _toIsoFromInput(value) {
+    const d = this._dateFromInput(value);
+    return d ? d.toISOString() : null;
+  },
+
+  _dateFromInput(value) {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  },
+
+  _toLocalDateTimeInput(date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return [
+      date.getFullYear(),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+    ].join("-") + "T" + [pad(date.getHours()), pad(date.getMinutes())].join(":");
   },
 
   // Formatting
@@ -137,6 +219,34 @@ const metricsStore = {
     return ((this.successCalls / this.totalCalls) * 100).toFixed(1) + "%";
   },
 
+  avgTokensInPerCall() {
+    return this.totalCalls ? this.fmtNum(Math.round(this.totalTokensIn / this.totalCalls)) : "0";
+  },
+
+  avgTokensOutPerCall() {
+    return this.totalCalls ? this.fmtNum(Math.round(this.totalTokensOut / this.totalCalls)) : "0";
+  },
+
+  activityTitle() {
+    return this.bucket === "day" ? "Activity by day" : "Activity by hour";
+  },
+
+  rangeLabel() {
+    if (this.rangeMode === "last24h") return "Last 24h";
+    return `${this._shortDateTime(this.fromDateTime)} - ${this._shortDateTime(this.toDateTime)}`;
+  },
+
+  _shortDateTime(value) {
+    const d = this._dateFromInput(value);
+    if (!d) return "Invalid";
+    return d.toLocaleString([], {
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  },
+
   fmtTime(ts) {
     if (!ts) return "";
     try {
@@ -161,6 +271,11 @@ const metricsStore = {
   maxOf(arr, key) {
     if (!arr || !arr.length) return 1;
     return Math.max(...arr.map(x => x[key] || 0), 1);
+  },
+
+  maxTokenSplit(arr) {
+    if (!arr || !arr.length) return 1;
+    return Math.max(...arr.flatMap(x => [x.tokens_in || 0, x.tokens_out || 0]), 1);
   },
 };
 

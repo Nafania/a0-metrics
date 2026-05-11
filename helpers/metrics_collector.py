@@ -12,6 +12,7 @@ import os
 import threading
 import time
 from collections import deque
+from datetime import datetime, timezone
 from typing import Any
 
 from helpers.print_style import PrintStyle
@@ -63,12 +64,29 @@ class MetricsCollector:
             self._events.append(event)
             self._dirty = True
 
-    def snapshot(self) -> dict[str, Any]:
+    def snapshot(
+        self,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        bucket: str = "hour",
+    ) -> dict[str, Any]:
         with self._lock:
-            events = list(self._events)
+            all_events = list(self._events)
+
+        from_epoch, to_epoch = _resolve_time_range(from_ts, to_ts)
+        bucket = bucket if bucket in {"hour", "day"} else "hour"
+        events = [
+            e for e in all_events
+            if _event_in_range(e, from_epoch, to_epoch)
+        ]
 
         if not events:
-            return self._empty_snapshot()
+            return self._empty_snapshot(
+                buffer_size=len(all_events),
+                from_epoch=from_epoch,
+                to_epoch=to_epoch,
+                bucket=bucket,
+            )
 
         success_events = [e for e in events if e.get("success")]
         failed_events = [e for e in events if not e.get("success")]
@@ -104,12 +122,16 @@ class MetricsCollector:
             "by_model": _aggregate_by(events, "model"),
             "by_usage_type": _aggregate_by(events, "usage_type"),
             "by_project": _aggregate_by_project(events),
-            "timeline": _build_timeline(events),
+            "timeline": _build_timeline(events, bucket),
             "recent_errors": _recent_errors(failed_events),
             "recent_events": _recent_events(events),
             "uptime_seconds": int(time.time() - self._started_at),
-            "buffer_size": len(events),
+            "buffer_size": len(all_events),
             "buffer_capacity": self._events.maxlen,
+            "filtered_count": len(events),
+            "range_from_ts": _epoch_to_iso(from_epoch),
+            "range_to_ts": _epoch_to_iso(to_epoch),
+            "bucket": bucket,
         }
 
     def clear(self) -> None:
@@ -168,7 +190,15 @@ class MetricsCollector:
         t.daemon = True
         t.start()
 
-    def _empty_snapshot(self) -> dict[str, Any]:
+    def _empty_snapshot(
+        self,
+        buffer_size: int | None = None,
+        from_epoch: float | None = None,
+        to_epoch: float | None = None,
+        bucket: str = "hour",
+    ) -> dict[str, Any]:
+        if from_epoch is None or to_epoch is None:
+            from_epoch, to_epoch = _resolve_time_range(None, None)
         return {
             "total_calls": 0, "success_calls": 0, "failed_calls": 0,
             "total_tokens_in": 0, "total_tokens_out": 0,
@@ -178,7 +208,12 @@ class MetricsCollector:
             "by_model": [], "by_usage_type": [], "by_project": [],
             "timeline": [], "recent_errors": [], "recent_events": [],
             "uptime_seconds": int(time.time() - self._started_at),
-            "buffer_size": 0, "buffer_capacity": self._events.maxlen,
+            "buffer_size": 0 if buffer_size is None else buffer_size,
+            "buffer_capacity": self._events.maxlen,
+            "filtered_count": 0,
+            "range_from_ts": _epoch_to_iso(from_epoch),
+            "range_to_ts": _epoch_to_iso(to_epoch),
+            "bucket": bucket if bucket in {"hour", "day"} else "hour",
         }
 
 
@@ -251,25 +286,30 @@ def _aggregate_by_project(events: list[dict]) -> list[dict]:
     return result
 
 
-def _build_timeline(events: list[dict]) -> list[dict]:
-    import datetime as _dt
-
-    now = time.time()
+def _build_timeline(events: list[dict], bucket: str = "hour") -> list[dict]:
     buckets: dict[int, dict] = {}
+    bucket_seconds = 86400 if bucket == "day" else 3600
     for e in events:
-        ts = e.get("timestamp", "")
-        try:
-            dt = _dt.datetime.fromisoformat(ts.rstrip("Z"))
-            epoch = dt.timestamp()
-        except Exception:
-            epoch = now
-        minute_key = int(epoch // 60) * 60
-        b = buckets.setdefault(minute_key, {"ts": minute_key, "calls": 0, "tokens": 0, "errors": 0})
+        epoch = _parse_event_epoch(e)
+        if epoch is None:
+            continue
+        bucket_key = int(epoch // bucket_seconds) * bucket_seconds
+        b = buckets.setdefault(
+            bucket_key,
+            {
+                "ts": bucket_key,
+                "calls": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "errors": 0,
+            },
+        )
         b["calls"] += 1
-        b["tokens"] += e.get("tokens_in", 0) + e.get("tokens_out", 0)
+        b["tokens_in"] += e.get("tokens_in", 0)
+        b["tokens_out"] += e.get("tokens_out", 0)
         if not e.get("success"):
             b["errors"] += 1
-    return sorted(buckets.values(), key=lambda x: x["ts"])[-60:]
+    return sorted(buckets.values(), key=lambda x: x["ts"])
 
 
 def _recent_errors(failed: list[dict], limit: int = 20) -> list[dict]:
@@ -315,6 +355,51 @@ def _percentile(data: list, pct: int) -> int:
     s = sorted(data)
     idx = min(int(len(s) * pct / 100), len(s) - 1)
     return int(s[idx])
+
+
+def _resolve_time_range(
+    from_ts: str | None,
+    to_ts: str | None,
+) -> tuple[float, float]:
+    to_epoch = _parse_timestamp_epoch(to_ts)
+    from_epoch = _parse_timestamp_epoch(from_ts)
+
+    if from_epoch is None or to_epoch is None:
+        to_epoch = time.time()
+        from_epoch = to_epoch - 86400
+
+    if from_epoch > to_epoch:
+        from_epoch, to_epoch = to_epoch, from_epoch
+
+    return from_epoch, to_epoch
+
+
+def _event_in_range(event: dict[str, Any], from_epoch: float, to_epoch: float) -> bool:
+    epoch = _parse_event_epoch(event)
+    return epoch is not None and from_epoch <= epoch <= to_epoch
+
+
+def _parse_event_epoch(event: dict[str, Any]) -> float | None:
+    return _parse_timestamp_epoch(event.get("timestamp"))
+
+
+def _parse_timestamp_epoch(value: Any) -> float | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        normalized = value.strip()
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def _epoch_to_iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat()
 
 
 collector = MetricsCollector()

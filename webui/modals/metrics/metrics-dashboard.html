@@ -32,10 +32,39 @@
                         <span class="m-uptime" x-show="$store.metricsDashboard.uptimeSeconds > 0">
                             <span x-text="$store.metricsDashboard.fmtUptime($store.metricsDashboard.uptimeSeconds)"></span>
                         </span>
-                        <button class="btn btn-sm btn-danger"
-                            @click="$confirmClick($event, () => $store.metricsDashboard.clearMetrics())" title="Clear">
-                            <span class="material-symbols-outlined" style="font-size:16px">delete</span>
-                        </button>
+                        <div class="m-range-control" @click.outside="$store.metricsDashboard.rangePickerOpen = false">
+                            <button class="m-range-btn" @click="$store.metricsDashboard.toggleRangePicker()">
+                                <span class="material-symbols-outlined">schedule</span>
+                                <span x-text="$store.metricsDashboard.rangeLabel()"></span>
+                                <span class="material-symbols-outlined">expand_more</span>
+                            </button>
+                            <div class="m-range-popover" x-show="$store.metricsDashboard.rangePickerOpen">
+                                <div class="m-range-row">
+                                    <label class="m-filter-field">
+                                        <span>From</span>
+                                        <input type="datetime-local" x-model="$store.metricsDashboard.fromDateTime" />
+                                    </label>
+                                    <label class="m-filter-field">
+                                        <span>To</span>
+                                        <input type="datetime-local" x-model="$store.metricsDashboard.toDateTime" />
+                                    </label>
+                                </div>
+                                <label class="m-filter-field">
+                                    <span>Bucket</span>
+                                    <select x-model="$store.metricsDashboard.bucket">
+                                        <option value="hour">Hour</option>
+                                        <option value="day">Day</option>
+                                    </select>
+                                </label>
+                                <div class="m-range-actions">
+                                    <button class="m-range-secondary" @click="$store.metricsDashboard.resetRange()">Last 24h</button>
+                                    <button class="m-range-primary" @click="$store.metricsDashboard.applyFilters()">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="m-filter-meta" x-show="$store.metricsDashboard.bufferSize > 0">
+                            <span x-text="$store.metricsDashboard.filteredCount"></span>/<span x-text="$store.metricsDashboard.bufferSize"></span>
+                        </span>
                     </div>
                 </div>
 
@@ -44,7 +73,7 @@
                 <div x-show="$store.metricsDashboard.error" class="m-error" x-text="$store.metricsDashboard.error"></div>
                 <div x-show="!$store.metricsDashboard.loading && $store.metricsDashboard.totalCalls === 0 && !$store.metricsDashboard.error" class="m-empty">
                     <span class="material-symbols-outlined" style="font-size:48px;opacity:0.3">monitoring</span>
-                    <p>No metrics yet. Data appears as LLM calls are made.</p>
+                    <p>No metrics in selected range.</p>
                 </div>
 
                 <!-- ═══════ OVERVIEW ═══════ -->
@@ -52,19 +81,23 @@
                     <div class="kpi-grid">
                         <div class="kpi-card kpi-accent">
                             <div class="kpi-icon"><span class="material-symbols-outlined">token</span></div>
-                            <div class="kpi-label">Total Tokens</div>
-                            <div class="kpi-value" x-text="$store.metricsDashboard.fmtNum($store.metricsDashboard.totalTokensIn + $store.metricsDashboard.totalTokensOut)"></div>
-                            <div class="kpi-sub">
-                                prompt <span x-text="$store.metricsDashboard.fmtNum($store.metricsDashboard.totalTokensIn)"></span>
-                                · response <span x-text="$store.metricsDashboard.fmtNum($store.metricsDashboard.totalTokensOut)"></span>
-                            </div>
+                            <div class="kpi-label">Tokens In</div>
+                            <div class="kpi-value" x-text="$store.metricsDashboard.fmtNum($store.metricsDashboard.totalTokensIn)"></div>
+                            <div class="kpi-sub">avg <span x-text="$store.metricsDashboard.avgTokensInPerCall()"></span> in/req</div>
+                        </div>
+                        <div class="kpi-card kpi-accent">
+                            <div class="kpi-icon"><span class="material-symbols-outlined">output</span></div>
+                            <div class="kpi-label">Tokens Out</div>
+                            <div class="kpi-value" x-text="$store.metricsDashboard.fmtNum($store.metricsDashboard.totalTokensOut)"></div>
+                            <div class="kpi-sub">avg <span x-text="$store.metricsDashboard.avgTokensOutPerCall()"></span> out/req</div>
                         </div>
                         <div class="kpi-card">
                             <div class="kpi-icon"><span class="material-symbols-outlined">counter_1</span></div>
                             <div class="kpi-label">Requests</div>
                             <div class="kpi-value" x-text="$store.metricsDashboard.totalCalls"></div>
                             <div class="kpi-sub">
-                                avg <span x-text="$store.metricsDashboard.totalCalls ? $store.metricsDashboard.fmtNum(Math.round(($store.metricsDashboard.totalTokensIn + $store.metricsDashboard.totalTokensOut) / $store.metricsDashboard.totalCalls)) : 0"></span> tok/req
+                                <span x-text="$store.metricsDashboard.successCalls"></span> ok ·
+                                <span x-text="$store.metricsDashboard.failedCalls"></span> err
                             </div>
                         </div>
                         <div class="kpi-card">
@@ -92,7 +125,7 @@
 
                     <!-- Timeline -->
                     <div class="m-section" x-show="($store.metricsDashboard.timeline || []).length > 1">
-                        <h3>Activity (last 60 min)</h3>
+                        <h3 x-text="$store.metricsDashboard.activityTitle()"></h3>
                         <div class="sparkline-box">
                             <svg viewBox="0 0 600 80" preserveAspectRatio="none" class="sparkline-svg">
                                 <path :d="$store.metricsDashboard.sparklinePath($store.metricsDashboard.timeline, 'calls', 600, 70)"
@@ -112,13 +145,14 @@
                         <h3>Top Models</h3>
                         <div class="mini-table-wrap">
                             <table class="mini-table">
-                                <thead><tr><th>Model</th><th>Calls</th><th>Tokens</th><th>Avg Latency</th></tr></thead>
+                                <thead><tr><th>Model</th><th>Calls</th><th>Tokens In</th><th>Tokens Out</th><th>Avg Latency</th></tr></thead>
                                 <tbody>
                                     <template x-for="(m, midx) in ($store.metricsDashboard.byModel || []).slice(0, 5)" :key="m.name || midx">
                                         <tr>
                                             <td class="cell-name" x-text="m.name"></td>
                                             <td x-text="m.calls"></td>
-                                            <td x-text="$store.metricsDashboard.fmtNum(m.tokens_in + m.tokens_out)"></td>
+                                            <td x-text="$store.metricsDashboard.fmtNum(m.tokens_in)"></td>
+                                            <td x-text="$store.metricsDashboard.fmtNum(m.tokens_out)"></td>
                                             <td x-text="$store.metricsDashboard.fmtLatency(m.avg_latency_ms)"></td>
                                         </tr>
                                     </template>
@@ -217,10 +251,11 @@
                             <template x-for="r in ($store.metricsDashboard.byUsageType || [])" :key="r.name">
                                 <div class="bar-row">
                                     <span class="bar-name" x-text="r.name"></span>
-                                    <div class="bar-track">
-                                        <div class="bar-fill" :style="'width:' + ((r.tokens_in + r.tokens_out) / $store.metricsDashboard.maxOf(($store.metricsDashboard.byUsageType || []).map(x=>({v:x.tokens_in+x.tokens_out})), 'v') * 100) + '%'"></div>
+                                    <div class="bar-track token-split-track">
+                                        <div class="bar-fill bar-fill-in" :style="'width:' + ((r.tokens_in || 0) / $store.metricsDashboard.maxTokenSplit($store.metricsDashboard.byUsageType || []) * 100) + '%'"></div>
+                                        <div class="bar-fill bar-fill-out" :style="'width:' + ((r.tokens_out || 0) / $store.metricsDashboard.maxTokenSplit($store.metricsDashboard.byUsageType || []) * 100) + '%'"></div>
                                     </div>
-                                    <span class="bar-val" x-text="$store.metricsDashboard.fmtNum(r.tokens_in + r.tokens_out)"></span>
+                                    <span class="bar-val bar-val-wide" x-text="$store.metricsDashboard.fmtNum(r.tokens_in) + ' / ' + $store.metricsDashboard.fmtNum(r.tokens_out)"></span>
                                 </div>
                             </template>
                         </div>
@@ -238,7 +273,7 @@
                                 <div class="proj-stats">
                                     <span x-text="proj.calls + ' calls'"></span>
                                     <span>·</span>
-                                    <span x-text="$store.metricsDashboard.fmtNum(proj.tokens_in + proj.tokens_out) + ' tok'"></span>
+                                    <span x-text="$store.metricsDashboard.fmtNum(proj.tokens_in) + ' in / ' + $store.metricsDashboard.fmtNum(proj.tokens_out) + ' out'"></span>
                                     <span>·</span>
                                     <span x-text="$store.metricsDashboard.fmtLatency(proj.avg_latency_ms) + ' avg'"></span>
                                     <span>·</span>
@@ -299,8 +334,23 @@
     .m-tab:hover { background:var(--color-background-hover,#222); color:var(--color-text,#eee); }
     .m-tab.active { background:var(--color-panel,#1a1a2e); color:var(--color-text,#eee); border-bottom:2px solid var(--color-accent,#60a5fa); }
     .m-tab-label { }
-    .m-tabs-right { margin-left:auto; display:flex; align-items:center; gap:8px; font-size:11px; color:var(--color-text-secondary,#888); }
+    .m-tabs-right { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:11px; color:var(--color-text-secondary,#888); flex-wrap:wrap; justify-content:flex-end; }
     .m-uptime { opacity:0.7; }
+
+    /* Filters */
+    .m-range-control { position:relative; }
+    .m-range-btn { height:30px; display:flex; align-items:center; gap:5px; padding:3px 9px; border:1px solid var(--color-border,#333); border-radius:6px; background:var(--color-panel,#1a1a2e); color:var(--color-text,#eee); font-size:11px; cursor:pointer; white-space:nowrap; }
+    .m-range-btn .material-symbols-outlined { font-size:15px; }
+    .m-range-btn:hover { background:var(--color-background-hover,#222); }
+    .m-range-popover { position:absolute; top:36px; right:0; z-index:50; width:360px; display:flex; flex-direction:column; gap:10px; padding:12px; background:var(--color-panel,#1a1a2e); border:1px solid var(--color-border,#333); border-radius:10px; }
+    .m-range-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .m-filter-field { display:flex; flex-direction:column; gap:4px; font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--color-text-secondary,#888); }
+    .m-filter-field input, .m-filter-field select { width:100%; height:30px; padding:3px 7px; border:1px solid var(--color-border,#333); border-radius:6px; background:var(--color-background,#111); color:var(--color-text,#eee); font-size:12px; text-transform:none; letter-spacing:normal; }
+    .m-range-actions { display:flex; justify-content:flex-end; gap:8px; }
+    .m-range-primary, .m-range-secondary { height:30px; padding:3px 10px; border-radius:6px; font-size:12px; cursor:pointer; }
+    .m-range-primary { border:1px solid var(--color-highlight,#2563eb); background:var(--color-highlight,#2563eb); color:#fff; }
+    .m-range-secondary { border:1px solid var(--color-border,#333); background:transparent; color:var(--color-text,#eee); }
+    .m-filter-meta { font-size:10px; color:var(--color-text-secondary,#888); white-space:nowrap; }
 
     /* States */
     .m-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:60px 20px; color:var(--color-text-secondary,#888); text-align:center; }
@@ -336,7 +386,12 @@
     .bar-track { flex:1; height:8px; background:var(--color-border,#333); border-radius:4px; overflow:hidden; }
     .bar-fill { height:100%; background:var(--color-accent,#60a5fa); border-radius:4px; transition:width .3s; }
     .bar-fill-ttft { background:#a78bfa; }
+    .bar-fill-in { background:var(--color-accent,#60a5fa); }
+    .bar-fill-out { background:#a78bfa; }
+    .token-split-track { height:16px; display:flex; flex-direction:column; gap:2px; background:transparent; }
+    .token-split-track .bar-fill { height:7px; }
     .bar-val { width:55px; font-size:11px; color:var(--color-text-secondary,#888); flex-shrink:0; }
+    .bar-val-wide { width:90px; }
 
     /* Tables */
     .agg-table-wrap, .mini-table-wrap { overflow-x:auto; }
@@ -385,6 +440,8 @@
         .m-tab-label { display:none; }
         .feed-ttft { display:none; }
         .proj-stats { flex-wrap:wrap; }
+        .m-tabs-right { width:100%; margin-left:0; justify-content:flex-start; }
+        .m-range-popover { left:0; right:auto; width:min(360px, calc(100vw - 40px)); }
     }
 </style>
 

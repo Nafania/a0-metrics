@@ -9,14 +9,14 @@ class MetricsDashboard(ApiHandler):
         action = input.get("action", "snapshot")
 
         if action == "snapshot":
-            snap = collector.snapshot()
+            snap = collector.snapshot(
+                from_ts=input.get("from_ts"),
+                to_ts=input.get("to_ts"),
+                bucket=input.get("bucket", "hour"),
+            )
             _resolve_chat_names(snap)
             return {"success": True, **snap}
-        elif action == "clear":
-            collector.clear()
-            return {"success": True, "message": "Metrics cleared"}
-        else:
-            return {"success": False, "error": f"Unknown action: {action}"}
+        return {"success": False, "error": f"Unknown action: {action}"}
 
 
 def _resolve_chat_names(snap: dict) -> None:
