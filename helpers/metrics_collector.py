@@ -255,8 +255,7 @@ def _aggregate_by_project(events: list[dict]) -> list[dict]:
     projects: dict[str, dict] = {}
     for e in events:
         proj = e.get("project") or "No Project"
-        chat = e.get("context_id") or "unknown"
-        chat_name = e.get("chat_name") or chat
+        chat, chat_name = _project_chat_bucket(e)
 
         p = projects.setdefault(proj, {
             "name": proj, "calls": 0, "tokens_in": 0, "tokens_out": 0,
@@ -284,6 +283,24 @@ def _aggregate_by_project(events: list[dict]) -> list[dict]:
         result.append(p)
     result.sort(key=lambda x: x["calls"], reverse=True)
     return result
+
+
+def _project_chat_bucket(event: dict) -> tuple[str, str]:
+    context_id = event.get("context_id")
+    chat_name = event.get("chat_name")
+    if context_id or chat_name:
+        key = context_id or chat_name
+        return key, chat_name or key
+
+    usage_type = event.get("usage_type") or "chat"
+    labels = {
+        "embedding": "Embeddings",
+        "internal": "Internal LLM calls",
+        "utility": "Utility model calls",
+        "chat": "Unknown chat",
+    }
+    label = labels.get(usage_type, f"{usage_type.title()} calls")
+    return f"__metrics_{usage_type}", label
 
 
 def _build_timeline(events: list[dict], bucket: str = "hour") -> list[dict]:
