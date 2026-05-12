@@ -1,0 +1,56 @@
+<html>
+<head>
+    <title>LLM Metrics</title>
+</head>
+<body>
+    <div x-data>
+        <template x-if="config">
+            <div>
+                <div class="section-title">LLM Metrics</div>
+                <div class="section-description">
+                    Configure metrics storage and dashboard retention.
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Ring Buffer Size</div>
+                        <div class="field-description">
+                            Maximum number of metric events kept in memory and persisted to disk.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1"
+                            x-model.number="config.ring_buffer_size" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Flush Interval Seconds</div>
+                        <div class="field-description">
+                            Minimum delay between automatic persistence writes.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="number" min="1" step="1"
+                            x-model.number="config.flush_interval_seconds" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <div class="field-label">
+                        <div class="field-title">Persistence File</div>
+                        <div class="field-description">
+                            Agent Zero path used to persist metrics JSON.
+                        </div>
+                    </div>
+                    <div class="field-control">
+                        <input type="text"
+                            x-model="config.persistence_file" />
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</body>
+</html>
